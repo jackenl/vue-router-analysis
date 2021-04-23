@@ -39,12 +39,12 @@ export default class VueRouter {
   afterHooks: Array<?AfterNavigationHook>
 
   constructor (options: RouterOptions = {}) {
-    this.app = null // 储存当前组件实例
+    this.app = null // 储存当前路由组件实例
     this.apps = [] // 路由组件实例集合
-    this.options = options
-    this.beforeHooks = []
-    this.resolveHooks = []
-    this.afterHooks = []
+    this.options = options // 存储配置参数
+    this.beforeHooks = [] // 前置导航守卫
+    this.resolveHooks = [] // 解析导航守卫
+    this.afterHooks = [] // 后置导航守卫
     this.matcher = createMatcher(options.routes || [], this)
 
     let mode = options.mode || 'hash'
@@ -84,7 +84,7 @@ export default class VueRouter {
   }
 
   init (app: any /* Vue component instance */) {
-    // 校验是否 VueRouter 是否已安装
+    // 校验 VueRouter 是否已注册安装
     process.env.NODE_ENV !== 'production' &&
       assert(
         install.installed,
@@ -92,10 +92,12 @@ export default class VueRouter {
           `before creating root instance.`
       )
 
-    this.apps.push(app)
+    this.apps.push(app) // 将路由组件实例压入集合栈，动态加载路由
 
     // set up app destroyed handler
     // https://github.com/vuejs/vue-router/issues/2639
+    // 定义组件实例 destroyed hook 钩子函数
+    // 用于组件销毁时从组件实例集合移除该组件
     app.$once('hook:destroyed', () => {
       // clean out app from this.apps array once destroyed
       const index = this.apps.indexOf(app)
@@ -104,11 +106,13 @@ export default class VueRouter {
       // we do not release the router so it can be reused
       if (this.app === app) this.app = this.apps[0] || null
 
+      // 如果不存在当前路由组件，则清空所有路由事件监听
       if (!this.app) this.history.teardown()
     })
 
     // main app previously initialized
     // return as we don't need to set up new history listener
+    // 主路由应用已经初始化，没必要再设置路由切换监听
     if (this.app) {
       return
     }
@@ -138,6 +142,7 @@ export default class VueRouter {
       )
     }
 
+    // 监听路由切换，重置每个组件实例的 _route 属性为当前显示路由组件的 route 对象
     history.listen(route => {
       this.apps.forEach(app => {
         app._route = route

@@ -22,11 +22,13 @@ export function createRouteMap (
   // $flow-disable-line
   const nameMap: Dictionary<RouteRecord> = oldNameMap || Object.create(null)
 
+  // 循环遍历生成路由记录
   routes.forEach(route => {
     addRouteRecord(pathList, pathMap, nameMap, route, parentRoute)
   })
 
   // ensure wildcard routes are always at the end
+  // 把通配符路由移到路由序列的最后
   for (let i = 0, l = pathList.length; i < l; i++) {
     if (pathList[i] === '*') {
       pathList.push(pathList.splice(i, 1)[0])
@@ -35,6 +37,7 @@ export function createRouteMap (
     }
   }
 
+  // 检测是否路由序列的 path 变量是否以'*'活'/'开头
   if (process.env.NODE_ENV === 'development') {
     // warn if routes do not include leading slashes
     const found = pathList
@@ -63,6 +66,7 @@ function addRouteRecord (
   matchAs?: string
 ) {
   const { path, name } = route
+  // 校验 path 和 name 的合法性
   if (process.env.NODE_ENV !== 'production') {
     assert(path != null, `"path" is required in a route configuration.`)
     assert(
@@ -83,7 +87,7 @@ function addRouteRecord (
 
   const pathToRegexpOptions: PathToRegexpOptions =
     route.pathToRegexpOptions || {}
-  const normalizedPath = normalizePath(path, parent, pathToRegexpOptions.strict)
+  const normalizedPath = normalizePath(path, parent, pathToRegexpOptions.strict) // 格式化路径
 
   if (typeof route.caseSensitive === 'boolean') {
     pathToRegexpOptions.sensitive = route.caseSensitive
@@ -136,6 +140,7 @@ function addRouteRecord (
         )
       }
     }
+    // 递归递归嵌套添加路由记录
     route.children.forEach(child => {
       const childMatchAs = matchAs
         ? cleanPath(`${matchAs}/${child.path}`)
@@ -144,11 +149,14 @@ function addRouteRecord (
     })
   }
 
+  // 防止命名冲突
   if (!pathMap[record.path]) {
     pathList.push(record.path)
-    pathMap[record.path] = record
+    pathMap[record.path] = record // 根据路径存储路由记录，允许通过 path 访问 record
   }
 
+  // 给含有别名的路由以别名为 path 生成路由记录
+  // 允许通过 alias 访问 record
   if (route.alias !== undefined) {
     const aliases = Array.isArray(route.alias) ? route.alias : [route.alias]
     for (let i = 0; i < aliases.length; ++i) {
@@ -177,6 +185,8 @@ function addRouteRecord (
     }
   }
 
+  // 如果含有 name 属性，给路由集合对象的 name 属性执行该 record 对象
+  // 允许通过 name 访问 record
   if (name) {
     if (!nameMap[name]) {
       nameMap[name] = record

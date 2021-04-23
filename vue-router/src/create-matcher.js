@@ -20,6 +20,8 @@ export function createMatcher (
   routes: Array<RouteConfig>,
   router: VueRouter
 ): Matcher {
+  // 生成路由path序列和记录记录集合
+  // 可通过 path 访问到路由记录集合对应的路由记录
   const { pathList, pathMap, nameMap } = createRouteMap(routes)
 
   function addRoutes (routes) {

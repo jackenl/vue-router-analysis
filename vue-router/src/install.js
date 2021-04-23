@@ -28,12 +28,15 @@ export function install (Vue) {
         // 根组件路由对象注入
         this._routerRoot = this
         this._router = this.$options.router
+        // router 对象初始化
         this._router.init(this)
+        // 给当前组件实例定义响应式属性 _route 指向当前 route 对象
         Vue.util.defineReactive(this, '_route', this._router.history.current)
       } else {
         // 子组件路由对象注入，最终指向根组件的路由对象
         this._routerRoot = (this.$parent && this.$parent._routerRoot) || this
       }
+      // 注册路由实例
       registerInstance(this, this)
     },
     destroyed () {

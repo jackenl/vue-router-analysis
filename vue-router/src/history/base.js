@@ -48,9 +48,9 @@ export class History {
 
   constructor (router: Router, base: ?string) {
     this.router = router
-    this.base = normalizeBase(base)
+    this.base = normalizeBase(base) // 格式化前置路径
     // start with a route object that stands for "nowhere"
-    this.current = START
+    this.current = START // 用于存储匹配当前路由对象的参数
     this.pending = null
     this.ready = false
     this.readyCbs = []
@@ -86,6 +86,7 @@ export class History {
     let route
     // catch redirect option https://github.com/vuejs/vue-router/issues/3201
     try {
+      // 匹配当前路由
       route = this.router.match(location, this.current)
     } catch (e) {
       this.errorCbs.forEach(cb => {
@@ -94,7 +95,7 @@ export class History {
       // Exception should still be thrown
       throw e
     }
-    const prev = this.current
+    const prev = this.current // 缓存前一个路由对象，用作导航守卫的 from 参数
     this.confirmTransition(
       route,
       () => {
