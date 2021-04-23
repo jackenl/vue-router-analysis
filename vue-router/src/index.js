@@ -39,8 +39,8 @@ export default class VueRouter {
   afterHooks: Array<?AfterNavigationHook>
 
   constructor (options: RouterOptions = {}) {
-    this.app = null
-    this.apps = []
+    this.app = null // 储存当前组件实例
+    this.apps = [] // 路由组件实例集合
     this.options = options
     this.beforeHooks = []
     this.resolveHooks = []
@@ -84,6 +84,7 @@ export default class VueRouter {
   }
 
   init (app: any /* Vue component instance */) {
+    // 校验是否 VueRouter 是否已安装
     process.env.NODE_ENV !== 'production' &&
       assert(
         install.installed,
@@ -286,6 +287,7 @@ VueRouter.isNavigationFailure = isNavigationFailure
 VueRouter.NavigationFailureType = NavigationFailureType
 VueRouter.START_LOCATION = START
 
+// 浏览器环境默认自动注册 VueRouter
 if (inBrowser && window.Vue) {
   window.Vue.use(VueRouter)
 }
