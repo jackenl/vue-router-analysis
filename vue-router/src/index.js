@@ -45,8 +45,10 @@ export default class VueRouter {
     this.beforeHooks = [] // 前置导航守卫
     this.resolveHooks = [] // 解析导航守卫
     this.afterHooks = [] // 后置导航守卫
+    // 创建路由匹配对象，通过 matcher 对象进行路由匹配
     this.matcher = createMatcher(options.routes || [], this)
 
+    // 根据不同 mode 采取不同路由模式
     let mode = options.mode || 'hash'
     this.fallback =
       mode === 'history' && !supportsPushState && options.fallback !== false
@@ -84,6 +86,7 @@ export default class VueRouter {
   }
 
   init (app: any /* Vue component instance */) {
+    console.log(app)
     // 校验 VueRouter 是否已注册安装
     process.env.NODE_ENV !== 'production' &&
       assert(
@@ -92,12 +95,12 @@ export default class VueRouter {
           `before creating root instance.`
       )
 
-    this.apps.push(app) // 将路由组件实例压入集合栈，动态加载路由
+    // 保存组件实例
+    this.apps.push(app)
 
     // set up app destroyed handler
     // https://github.com/vuejs/vue-router/issues/2639
-    // 定义组件实例 destroyed hook 钩子函数
-    // 用于组件销毁时从组件实例集合移除该组件
+    // 组件实例销毁移除
     app.$once('hook:destroyed', () => {
       // clean out app from this.apps array once destroyed
       const index = this.apps.indexOf(app)
@@ -106,13 +109,11 @@ export default class VueRouter {
       // we do not release the router so it can be reused
       if (this.app === app) this.app = this.apps[0] || null
 
-      // 如果不存在当前路由组件，则清空所有路由事件监听
       if (!this.app) this.history.teardown()
     })
 
     // main app previously initialized
     // return as we don't need to set up new history listener
-    // 主路由应用已经初始化，没必要再设置路由切换监听
     if (this.app) {
       return
     }
@@ -122,6 +123,7 @@ export default class VueRouter {
     const history = this.history
 
     if (history instanceof HTML5History || history instanceof HashHistory) {
+      // 初始化滚动
       const handleInitialScroll = routeOrError => {
         const from = history.current
         const expectScroll = this.options.scrollBehavior
@@ -131,10 +133,13 @@ export default class VueRouter {
           handleScroll(this, routeOrError, from, false)
         }
       }
+      // 添加路由监听
       const setupListeners = routeOrError => {
+        // 根据不同路由模式设置 pushState 或 hashChange 事件监听
         history.setupListeners()
         handleInitialScroll(routeOrError)
       }
+      // 路由跳转
       history.transitionTo(
         history.getCurrentLocation(),
         setupListeners,
@@ -142,7 +147,7 @@ export default class VueRouter {
       )
     }
 
-    // 监听路由切换，重置每个组件实例的 _route 属性为当前显示路由组件的 route 对象
+    // 监听路由切换，为 _route 属性重新赋值，触发组件渲染
     history.listen(route => {
       this.apps.forEach(app => {
         app._route = route

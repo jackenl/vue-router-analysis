@@ -20,8 +20,7 @@ export function createMatcher (
   routes: Array<RouteConfig>,
   router: VueRouter
 ): Matcher {
-  // 生成路由path序列和记录记录集合
-  // 可通过 path 访问到路由记录集合对应的路由记录
+  // 生成路由path序列和路由记录映射
   const { pathList, pathMap, nameMap } = createRouteMap(routes)
 
   function addRoutes (routes) {
@@ -50,14 +49,17 @@ export function createMatcher (
     return pathList.map(path => pathMap[path])
   }
 
+  // 路由匹配方法
   function match (
     raw: RawLocation,
     currentRoute?: Route,
     redirectedFrom?: Location
   ): Route {
+    // 序列化 url
     const location = normalizeLocation(raw, currentRoute, false, router)
     const { name } = location
 
+    // 匹配路由记录，创建 route 对象
     if (name) {
       const record = nameMap[name]
       if (process.env.NODE_ENV !== 'production') {

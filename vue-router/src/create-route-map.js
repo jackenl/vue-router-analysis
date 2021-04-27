@@ -18,11 +18,13 @@ export function createRouteMap (
   // the path list is used to control path matching priority
   const pathList: Array<string> = oldPathList || []
   // $flow-disable-line
+  // 以路径或别名为键值的映射表
   const pathMap: Dictionary<RouteRecord> = oldPathMap || Object.create(null)
   // $flow-disable-line
+  // 以名字为键值的映射表
   const nameMap: Dictionary<RouteRecord> = oldNameMap || Object.create(null)
 
-  // 循环遍历生成路由记录
+  // 遍历路由配置，给每一个路由配置创建路由记录
   routes.forEach(route => {
     addRouteRecord(pathList, pathMap, nameMap, route, parentRoute)
   })
@@ -37,7 +39,7 @@ export function createRouteMap (
     }
   }
 
-  // 检测是否路由序列的 path 变量是否以'*'活'/'开头
+  // 确认所有 path 是否以'*'或'/'开头
   if (process.env.NODE_ENV === 'development') {
     // warn if routes do not include leading slashes
     const found = pathList
@@ -49,6 +51,11 @@ export function createRouteMap (
       warn(false, `Non-nested routes must include a leading slash character. Fix the following routes: \n${pathNames}`)
     }
   }
+  console.log({
+    pathList,
+    pathMap,
+    nameMap
+  })
 
   return {
     pathList,
@@ -57,6 +64,7 @@ export function createRouteMap (
   }
 }
 
+// 添加路由记录
 function addRouteRecord (
   pathList: Array<string>,
   pathMap: Dictionary<RouteRecord>,
@@ -66,7 +74,7 @@ function addRouteRecord (
   matchAs?: string
 ) {
   const { path, name } = route
-  // 校验 path 和 name 的合法性
+  // 校验配置参数合法性
   if (process.env.NODE_ENV !== 'production') {
     assert(path != null, `"path" is required in a route configuration.`)
     assert(
@@ -87,12 +95,14 @@ function addRouteRecord (
 
   const pathToRegexpOptions: PathToRegexpOptions =
     route.pathToRegexpOptions || {}
-  const normalizedPath = normalizePath(path, parent, pathToRegexpOptions.strict) // 格式化路径
+  // 格式化 path
+  const normalizedPath = normalizePath(path, parent, pathToRegexpOptions.strict)
 
   if (typeof route.caseSensitive === 'boolean') {
     pathToRegexpOptions.sensitive = route.caseSensitive
   }
 
+  // 生成记录对象
   const record: RouteRecord = {
     path: normalizedPath,
     regex: compileRouteRegex(normalizedPath, pathToRegexpOptions),
@@ -140,7 +150,7 @@ function addRouteRecord (
         )
       }
     }
-    // 递归递归嵌套添加路由记录
+    // 递归嵌套路由配置添加路由记录
     route.children.forEach(child => {
       const childMatchAs = matchAs
         ? cleanPath(`${matchAs}/${child.path}`)
@@ -149,14 +159,13 @@ function addRouteRecord (
     })
   }
 
-  // 防止命名冲突
+  // 防止映射冲突
   if (!pathMap[record.path]) {
     pathList.push(record.path)
-    pathMap[record.path] = record // 根据路径存储路由记录，允许通过 path 访问 record
+    pathMap[record.path] = record
   }
 
-  // 给含有别名的路由以别名为 path 生成路由记录
-  // 允许通过 alias 访问 record
+  // 如果有别名，也给别名添加对应记录映射
   if (route.alias !== undefined) {
     const aliases = Array.isArray(route.alias) ? route.alias : [route.alias]
     for (let i = 0; i < aliases.length; ++i) {
@@ -185,8 +194,7 @@ function addRouteRecord (
     }
   }
 
-  // 如果含有 name 属性，给路由集合对象的 name 属性执行该 record 对象
-  // 允许通过 name 访问 record
+  // 如果有路由名字，则给名字添加对应记录映射
   if (name) {
     if (!nameMap[name]) {
       nameMap[name] = record

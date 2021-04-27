@@ -24,16 +24,16 @@ export function install (Vue) {
   // 并通过 RouterView 组件注册、销毁路由组件实例
   Vue.mixin({
     beforeCreate () {
+      // 对根组件进行路由初始化，令所有组件 _routerRoot 属性指向根组件
       if (isDef(this.$options.router)) {
-        // 根组件路由对象注入
         this._routerRoot = this
         this._router = this.$options.router
         // router 对象初始化
         this._router.init(this)
-        // 给当前组件实例定义响应式属性 _route 指向当前 route 对象
+        /** 重点：为 _route 属性实现双向绑定 */
+        // 触发组件渲染
         Vue.util.defineReactive(this, '_route', this._router.history.current)
       } else {
-        // 子组件路由对象注入，最终指向根组件的路由对象
         this._routerRoot = (this.$parent && this.$parent._routerRoot) || this
       }
       // 注册路由实例
@@ -44,11 +44,10 @@ export function install (Vue) {
     }
   })
 
-  // 通过 Object.defineProperty 代理 Vue.prototype.$router 到 Vue 实例内部变量 _routerRoot._router 上
+  // 绑定 $router 和 $route 属性到 router 对象和当前 route 对象
   Object.defineProperty(Vue.prototype, '$router', {
     get () { return this._routerRoot._router }
   })
-  // 通过 Object.defineProperty 代理 Vue.prototype.$route 到 Vue 实例内部变量 _routerRoot._route 上
   Object.defineProperty(Vue.prototype, '$route', {
     get () { return this._routerRoot._route }
   })

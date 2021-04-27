@@ -28,6 +28,8 @@ module.exports = {
     publicPath: '/__build__/'
   },
 
+  devtool: 'source-map',
+
   module: {
     rules: [
       {

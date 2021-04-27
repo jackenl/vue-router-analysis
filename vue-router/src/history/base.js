@@ -86,7 +86,7 @@ export class History {
     let route
     // catch redirect option https://github.com/vuejs/vue-router/issues/3201
     try {
-      // 匹配当前路由
+      // 获得匹配路由信息
       route = this.router.match(location, this.current)
     } catch (e) {
       this.errorCbs.forEach(cb => {
@@ -96,17 +96,22 @@ export class History {
       throw e
     }
     const prev = this.current // 缓存前一个路由对象，用作导航守卫的 from 参数
+    // 确认路由切换
     this.confirmTransition(
       route,
       () => {
+        // 更新路由，给 _route 属性重新赋值
         this.updateRoute(route)
         onComplete && onComplete(route)
+        // 更新 url
         this.ensureURL()
+        // 触发 afterHook 回调
         this.router.afterHooks.forEach(hook => {
           hook && hook(route, prev)
         })
 
         // fire ready cbs once
+        // 完成后只执行一次 ready 回调
         if (!this.ready) {
           this.ready = true
           this.readyCbs.forEach(cb => {
@@ -135,8 +140,13 @@ export class History {
   }
 
   confirmTransition (route: Route, onComplete: Function, onAbort?: Function) {
+    console.log({
+      route,
+      current: this.current
+    })
     const current = this.current
-    this.pending = route
+    this.pending = route // 缓存路由
+    // 中断路由跳转
     const abort = err => {
       // changed after adding errors with
       // https://github.com/vuejs/vue-router/pull/3047 before that change,
@@ -155,6 +165,7 @@ export class History {
     }
     const lastRouteIndex = route.matched.length - 1
     const lastCurrentIndex = current.matched.length - 1
+    // 相同路由中断路由跳转
     if (
       isSameRoute(route, current) &&
       // in the case the route map has been dynamically appended to
@@ -165,6 +176,7 @@ export class History {
       return abort(createNavigationDuplicatedError(current, route))
     }
 
+    // 对比路由，解析出可复用组件路由、失活组件路由、当前激活组件路由
     const { updated, deactivated, activated } = resolveQueue(
       this.current.matched,
       route.matched
@@ -172,23 +184,30 @@ export class History {
 
     const queue: Array<?NavigationGuard> = [].concat(
       // in-component leave guards
+      // 失活组件 beforeLeave 钩子
       extractLeaveGuards(deactivated),
       // global before hooks
+      // 全局 beforeEach 钩子
       this.router.beforeHooks,
       // in-component update hooks
+      // 可复用组件 beforeUpdate 钩子
       extractUpdateHooks(updated),
       // in-config enter guards
+      // 当前激活组件 beforeEnter 钩子
       activated.map(m => m.beforeEnter),
       // async components
+      // 解析异步路由组件
       resolveAsyncComponents(activated)
     )
 
+    // 导航守卫钩子执行迭代器
     const iterator = (hook: NavigationGuard, next) => {
       if (this.pending !== route) {
         return abort(createNavigationCancelledError(current, route))
       }
       try {
         hook(route, current, (to: any) => {
+          // 判断 next() 传参
           if (to === false) {
             // next(false) -> abort navigation, ensure current URL
             this.ensureURL(true)

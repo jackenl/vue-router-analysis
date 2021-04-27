@@ -18,6 +18,7 @@ export function createRoute (
     query = clone(query)
   } catch (e) {}
 
+  // 创建路由对象
   const route: Route = {
     name: location.name || (record && record.name),
     meta: (record && record.meta) || {},
@@ -31,9 +32,11 @@ export function createRoute (
   if (redirectedFrom) {
     route.redirectedFrom = getFullPath(redirectedFrom, stringifyQuery)
   }
+  // 禁止修改路由对象
   return Object.freeze(route)
 }
 
+// 深度克隆
 function clone (value) {
   if (Array.isArray(value)) {
     return value.map(clone)
