@@ -100,7 +100,7 @@ export class History {
     this.confirmTransition(
       route,
       () => {
-        // 更新路由，给 _route 属性重新赋值
+        // 更新路由
         this.updateRoute(route)
         onComplete && onComplete(route)
         // 更新 url
@@ -140,10 +140,6 @@ export class History {
   }
 
   confirmTransition (route: Route, onComplete: Function, onAbort?: Function) {
-    console.log({
-      route,
-      current: this.current
-    })
     const current = this.current
     this.pending = route // 缓存路由
     // 中断路由跳转
@@ -182,6 +178,7 @@ export class History {
       route.matched
     )
 
+    // 导航守卫队列
     const queue: Array<?NavigationGuard> = [].concat(
       // in-component leave guards
       // 失活组件 beforeLeave 钩子
@@ -193,7 +190,7 @@ export class History {
       // 可复用组件 beforeUpdate 钩子
       extractUpdateHooks(updated),
       // in-config enter guards
-      // 当前激活组件 beforeEnter 钩子
+      // 路由独享钩子
       activated.map(m => m.beforeEnter),
       // async components
       // 解析异步路由组件
@@ -229,6 +226,7 @@ export class History {
             }
           } else {
             // confirm transition and pass on the value
+            // 执行下一个步骤器 step(index + 1)
             next(to)
           }
         })
@@ -237,18 +235,23 @@ export class History {
       }
     }
 
+    // 异步钩子同步执行
     runQueue(queue, iterator, () => {
       // wait until async components are resolved before
       // extracting in-component enter guards
+      // 所有异步组件解析完成后，会执行该回调
+      // 获取渲染组件 beforeRouteEnter 钩子
       const enterGuards = extractEnterGuards(activated)
+      // 合并全局解析守卫
       const queue = enterGuards.concat(this.router.resolveHooks)
       runQueue(queue, iterator, () => {
         if (this.pending !== route) {
           return abort(createNavigationCancelledError(current, route))
         }
         this.pending = null
-        onComplete(route)
+        onComplete(route) // 触发路由切换完成监听
         if (this.router.app) {
+          // 保证在组件 beforeCreate 钩子回调执行后再执行 beforeRouteEnter 钩子回调
           this.router.app.$nextTick(() => {
             handleRouteEntered(route)
           })
@@ -330,13 +333,18 @@ function extractGuards (
   reverse?: boolean
 ): Array<?Function> {
   const guards = flatMapComponents(records, (def, instance, match, key) => {
+    // 获取组件对应的钩子
     const guard = extractGuard(def, name)
     if (guard) {
+      // 返回每个钩子绑定到对应组件实例执行的函数
+      // 使 beforeRouteEnter 钩子的 next 回调中通过
       return Array.isArray(guard)
         ? guard.map(guard => bind(guard, instance, match, key))
         : bind(guard, instance, match, key)
     }
   })
+  // 数组扁平化，同时判断是否翻转数组
+  // 有些钩子从子到父开始执行
   return flatten(reverse ? guards.reverse() : guards)
 }
 
@@ -367,6 +375,7 @@ function bindGuard (guard: NavigationGuard, instance: ?_Vue): ?NavigationGuard {
   }
 }
 
+// 获取异步组件 beforeRouteEnter 钩子
 function extractEnterGuards (
   activated: Array<RouteRecord>
 ): Array<?Function> {
@@ -386,6 +395,8 @@ function bindEnterGuard (
 ): NavigationGuard {
   return function routeEnterGuard (to, from, next) {
     return guard(to, from, cb => {
+      // 把 beforeRouteEnter 守卫回调插入路由记录对象的 enteredCbs 属性中
+      // 用于路由组件挂载完成后执行
       if (typeof cb === 'function') {
         if (!match.enteredCbs[key]) {
           match.enteredCbs[key] = []

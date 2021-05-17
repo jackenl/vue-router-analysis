@@ -16,25 +16,31 @@ export function resolveAsyncComponents (matched: Array<RouteRecord>): Function {
       // we are not using Vue's default async resolving mechanism because
       // we want to halt the navigation until the incoming component has been
       // resolved.
+      // 判断是否异步组件
       if (typeof def === 'function' && def.cid === undefined) {
         hasAsync = true
         pending++
 
+        // 组件导入成功回调
         const resolve = once(resolvedDef => {
           if (isESModule(resolvedDef)) {
             resolvedDef = resolvedDef.default
           }
           // save resolved on async factory in case it's used elsewhere
+          // 判断是否是构造函数(渲染函数)
+          // 如果不是则通过Vue.extend生成渲染函数
           def.resolved = typeof resolvedDef === 'function'
             ? resolvedDef
             : _Vue.extend(resolvedDef)
+          // 赋值到组件集合
           match.components[key] = resolvedDef
           pending--
+          // 等待所有异步组件解析完成,继续下一步
           if (pending <= 0) {
             next()
           }
         })
-
+        // 组件导入失败回调
         const reject = once(reason => {
           const msg = `Failed to resolve async component ${key}: ${reason}`
           process.env.NODE_ENV !== 'production' && warn(false, msg)
@@ -48,10 +54,12 @@ export function resolveAsyncComponents (matched: Array<RouteRecord>): Function {
 
         let res
         try {
+          // 执行异步组件函数
           res = def(resolve, reject)
         } catch (e) {
           reject(e)
         }
+        // 如果有子组件,继续执行then
         if (res) {
           if (typeof res.then === 'function') {
             res.then(resolve, reject)
@@ -66,6 +74,7 @@ export function resolveAsyncComponents (matched: Array<RouteRecord>): Function {
       }
     })
 
+    // 如果不是异步组件直接下一步
     if (!hasAsync) next()
   }
 }
