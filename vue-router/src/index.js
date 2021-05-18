@@ -147,6 +147,7 @@ export default class VueRouter {
       )
     }
 
+    // 设置路由切换监听
     // 监听路由切换，为 _route 属性重新赋值，触发组件渲染
     history.listen(route => {
       this.apps.forEach(app => {

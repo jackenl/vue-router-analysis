@@ -68,6 +68,8 @@ const Qux = {
     // and only switch after the data has been fetched.
     setTimeout(() => {
       next(vm => {
+        console.log('this: ', this)
+        console.log('vm: ', vm)
         vm.msg = 'Qux'
       })
     }, 300)

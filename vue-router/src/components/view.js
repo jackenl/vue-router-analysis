@@ -39,6 +39,7 @@ export default {
     data.routerViewDepth = depth
 
     // render previous view if the tree is inactive and kept-alive
+    // 渲染 keepAlive 缓存组件
     if (inactive) {
       const cachedData = cache[name]
       const cachedComponent = cachedData && cachedData.component

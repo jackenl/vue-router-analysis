@@ -147,6 +147,8 @@ export function handleRouteEntered (route: Route) {
       if (!instance || !cbs) continue
       delete record.enteredCbs[name]
       for (let i = 0; i < cbs.length; i++) {
+        // 给 beforeRouteEnter 钩子next回调传递组件实例参数
+        // 使next回调函数能够访问组件实例
         if (!instance._isBeingDestroyed) cbs[i](instance)
       }
     }

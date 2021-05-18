@@ -250,8 +250,11 @@ export class History {
         }
         this.pending = null
         onComplete(route) // 触发路由切换完成监听
+        // 保证在组件 beforeCreate 钩子执行后再执行 beforeRouteEnter 钩子
         if (this.router.app) {
-          // 保证在组件 beforeCreate 钩子回调执行后再执行 beforeRouteEnter 钩子回调
+          // 等到组件实例被创建后再执行 beforeRouteEnter 钩子 next 回调
+          // 并将组件实例传递给 next 回调
+          // 可以通过 next 回调访问组件实例
           this.router.app.$nextTick(() => {
             handleRouteEntered(route)
           })
@@ -262,6 +265,7 @@ export class History {
 
   updateRoute (route: Route) {
     this.current = route
+    // 触发路由切换监听回调
     this.cb && this.cb(route)
   }
 
@@ -344,7 +348,7 @@ function extractGuards (
     }
   })
   // 数组扁平化，同时判断是否翻转数组
-  // 有些钩子从子到父开始执行
+  // beforeRouteLeave 钩子需要从子到父执行
   return flatten(reverse ? guards.reverse() : guards)
 }
 

@@ -30,8 +30,7 @@ export function install (Vue) {
         this._router = this.$options.router
         // router 对象初始化
         this._router.init(this)
-        /** 重点：为 _route 属性实现双向绑定 */
-        // 触发组件渲染
+        // 对 _route 属性进行双向绑定
         Vue.util.defineReactive(this, '_route', this._router.history.current)
       } else {
         this._routerRoot = (this.$parent && this.$parent._routerRoot) || this

@@ -1,0 +1,28 @@
+{
+  "name": "vue-router-analysis",
+  "version": "1.0.0",
+  "description": "```\r src\r ├── components\r ├── create-matcher.js\r ├── create-route-map.js\r ├── history\r ├── index.js\r ├── install.js\r └── util\r ```",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "import": "webpack --config examples/normal-import/webpack.config.js",
+    "import:async": "webpack --config examples/async-import/webpack.config.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jackenl/vue-router-analysis.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jackenl/vue-router-analysis/issues"
+  },
+  "homepage": "https://github.com/jackenl/vue-router-analysis#readme",
+  "devDependencies": {
+    "webpack": "^5.37.0",
+    "webpack-cli": "^4.7.0"
+  }
+}
