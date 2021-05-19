@@ -13,6 +13,7 @@ export class HTML5History extends History {
   constructor (router: Router, base: ?string) {
     super(router, base)
 
+    // 获取起始url
     this._startLocation = getLocation(this.base)
   }
 

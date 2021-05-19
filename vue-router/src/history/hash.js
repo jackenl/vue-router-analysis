@@ -11,9 +11,11 @@ export class HashHistory extends History {
   constructor (router: Router, base: ?string, fallback: boolean) {
     super(router, base)
     // check history fallback deeplinking
+    // 当浏览器不支持 history.pushState 控制路由是否应该回退到 hash 模式
     if (fallback && checkFallback(this.base)) {
       return
     }
+    // 保证 hash 值以/开头，如果没有则开头添加/
     ensureSlash()
   }
 

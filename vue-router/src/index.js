@@ -39,16 +39,16 @@ export default class VueRouter {
   afterHooks: Array<?AfterNavigationHook>
 
   constructor (options: RouterOptions = {}) {
-    this.app = null // 储存当前路由组件实例
-    this.apps = [] // 路由组件实例集合
-    this.options = options // 存储配置参数
-    this.beforeHooks = [] // 前置导航守卫
-    this.resolveHooks = [] // 解析导航守卫
-    this.afterHooks = [] // 后置导航守卫
+    this.app = null
+    this.apps = []
+    this.options = options
+    this.beforeHooks = []
+    this.resolveHooks = []
+    this.afterHooks = []
     // 创建路由匹配对象，通过 matcher 对象进行路由匹配
     this.matcher = createMatcher(options.routes || [], this)
 
-    // 根据不同 mode 采取不同路由模式
+    // 根据不同 mode 使用不同路由模式
     let mode = options.mode || 'hash'
     this.fallback =
       mode === 'history' && !supportsPushState && options.fallback !== false
@@ -86,8 +86,7 @@ export default class VueRouter {
   }
 
   init (app: any /* Vue component instance */) {
-    console.log(app)
-    // 校验 VueRouter 是否已注册安装
+    // 校验 VueRouter 是否已安装
     process.env.NODE_ENV !== 'production' &&
       assert(
         install.installed,
@@ -100,7 +99,7 @@ export default class VueRouter {
 
     // set up app destroyed handler
     // https://github.com/vuejs/vue-router/issues/2639
-    // 组件实例销毁移除
+    // 组件被销毁时从 apps 中移除该组件并重置 history
     app.$once('hook:destroyed', () => {
       // clean out app from this.apps array once destroyed
       const index = this.apps.indexOf(app)
@@ -123,7 +122,6 @@ export default class VueRouter {
     const history = this.history
 
     if (history instanceof HTML5History || history instanceof HashHistory) {
-      // 初始化滚动
       const handleInitialScroll = routeOrError => {
         const from = history.current
         const expectScroll = this.options.scrollBehavior
@@ -133,10 +131,11 @@ export default class VueRouter {
           handleScroll(this, routeOrError, from, false)
         }
       }
-      // 添加路由监听
+      // 路由切换监听
       const setupListeners = routeOrError => {
-        // 根据不同路由模式设置 pushState 或 hashChange 事件监听
+        // 根据不同 history 模式监听路由切换进行对应模式的路由跳转
         history.setupListeners()
+        // 页面滚动初始化
         handleInitialScroll(routeOrError)
       }
       // 路由跳转
@@ -147,10 +146,10 @@ export default class VueRouter {
       )
     }
 
-    // 设置路由切换监听
-    // 监听路由切换，为 _route 属性重新赋值，触发组件渲染
+    // 路由切换监听
     history.listen(route => {
       this.apps.forEach(app => {
+        // 替换当前 route 对象,触发路由组件替换
         app._route = route
       })
     })

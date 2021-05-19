@@ -18,19 +18,20 @@ export function createRouteMap (
   // the path list is used to control path matching priority
   const pathList: Array<string> = oldPathList || []
   // $flow-disable-line
-  // 以路径或别名为键值的映射表
+  // path 或 alias 路由映射表
   const pathMap: Dictionary<RouteRecord> = oldPathMap || Object.create(null)
   // $flow-disable-line
-  // 以名字为键值的映射表
+  // 名称路由映射表
   const nameMap: Dictionary<RouteRecord> = oldNameMap || Object.create(null)
 
-  // 遍历路由配置，给每一个路由配置创建路由记录
+  // 给每一个 route 对象添加路由记录
   routes.forEach(route => {
     addRouteRecord(pathList, pathMap, nameMap, route, parentRoute)
   })
 
   // ensure wildcard routes are always at the end
-  // 把通配符路由移到路由序列的最后
+  // 把通配符 path 移到队列尾部
+  // 使通配符匹配为最后
   for (let i = 0, l = pathList.length; i < l; i++) {
     if (pathList[i] === '*') {
       pathList.push(pathList.splice(i, 1)[0])
@@ -39,7 +40,8 @@ export function createRouteMap (
     }
   }
 
-  // 确认所有 path 是否以'*'或'/'开头
+  // 检查 path 队列中是含有起始路径‘/’或通配符‘*’
+  // 保证可以匹配到起始路由
   if (process.env.NODE_ENV === 'development') {
     // warn if routes do not include leading slashes
     const found = pathList
@@ -51,11 +53,6 @@ export function createRouteMap (
       warn(false, `Non-nested routes must include a leading slash character. Fix the following routes: \n${pathNames}`)
     }
   }
-  console.log({
-    pathList,
-    pathMap,
-    nameMap
-  })
 
   return {
     pathList,
@@ -64,7 +61,6 @@ export function createRouteMap (
   }
 }
 
-// 添加路由记录
 function addRouteRecord (
   pathList: Array<string>,
   pathMap: Dictionary<RouteRecord>,
@@ -92,12 +88,13 @@ function addRouteRecord (
         `encodeURI to encode static segments of your path.`
     )
   }
-
+  // 正则匹配规则参数
   const pathToRegexpOptions: PathToRegexpOptions =
     route.pathToRegexpOptions || {}
-  // 格式化 path
+  // 序列化 path
   const normalizedPath = normalizePath(path, parent, pathToRegexpOptions.strict)
 
+  // 匹配规则是否大小写敏感
   if (typeof route.caseSensitive === 'boolean') {
     pathToRegexpOptions.sensitive = route.caseSensitive
   }
@@ -105,6 +102,7 @@ function addRouteRecord (
   // 生成记录对象
   const record: RouteRecord = {
     path: normalizedPath,
+    // 生成 path 正则匹配表达式
     regex: compileRouteRegex(normalizedPath, pathToRegexpOptions),
     components: route.components || { default: route.component },
     alias: route.alias
@@ -132,6 +130,7 @@ function addRouteRecord (
     // Warn if route is named, does not redirect and has a default child route.
     // If users navigate to this route by name, the default child will
     // not be rendered (GH Issue #629)
+    // 校验嵌套路由规则合法性
     if (process.env.NODE_ENV !== 'production') {
       if (
         route.name &&
@@ -150,7 +149,7 @@ function addRouteRecord (
         )
       }
     }
-    // 递归嵌套路由配置添加路由记录
+    // 给嵌套路由规则添加路由记录
     route.children.forEach(child => {
       const childMatchAs = matchAs
         ? cleanPath(`${matchAs}/${child.path}`)
@@ -159,13 +158,13 @@ function addRouteRecord (
     })
   }
 
-  // 防止映射冲突
+  // 添加基于 path 路由记录映射
   if (!pathMap[record.path]) {
     pathList.push(record.path)
     pathMap[record.path] = record
   }
 
-  // 如果有别名，也给别名添加对应记录映射
+  // 给 alias 创建路由记录并添加到基于 path 路由记录映射集合
   if (route.alias !== undefined) {
     const aliases = Array.isArray(route.alias) ? route.alias : [route.alias]
     for (let i = 0; i < aliases.length; ++i) {
@@ -194,7 +193,7 @@ function addRouteRecord (
     }
   }
 
-  // 如果有路由名字，则给名字添加对应记录映射
+  // 添加基于 name 路由记录映射
   if (name) {
     if (!nameMap[name]) {
       nameMap[name] = record

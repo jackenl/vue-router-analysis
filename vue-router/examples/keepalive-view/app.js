@@ -9,6 +9,9 @@ const Index = {
   template: '<wrap />',
   components: {
     Wrap
+  },
+  mounted () {
+    console.log(this.$parent)
   }
 }
 
@@ -25,7 +28,12 @@ const WithGuard = {
 const IndexChild1 = { template: '<div>index child1</div>' }
 const IndexChild2 = { template: '<div>index child2</div>' }
 
-const Home = { template: '<div>home</div>' }
+const Home = {
+  template: '<div>home</div>',
+  mounted () {
+    console.log(this.$parent)
+  }
+}
 
 const ViewWithKeepalive = {
   template: '<keep-alive><router-view></router-view></keep-alive>'

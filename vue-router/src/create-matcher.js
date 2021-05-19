@@ -20,7 +20,7 @@ export function createMatcher (
   routes: Array<RouteConfig>,
   router: VueRouter
 ): Matcher {
-  // 生成路由path序列和路由记录映射
+  // 生成 path 队列、path路由映射和名称路由映射
   const { pathList, pathMap, nameMap } = createRouteMap(routes)
 
   function addRoutes (routes) {
@@ -30,9 +30,11 @@ export function createMatcher (
   function addRoute (parentOrRoute, route) {
     const parent = (typeof parentOrRoute !== 'object') ? nameMap[parentOrRoute] : undefined
     // $flow-disable-line
+    // 创建基于自身 path 的路由记录映射
     createRouteMap([route || parentOrRoute], pathList, pathMap, nameMap, parent)
 
     // add aliases of parent
+    // 创建基于父级 alias 的路由记录映射
     if (parent) {
       createRouteMap(
         // $flow-disable-line route is defined if parent is
@@ -49,23 +51,24 @@ export function createMatcher (
     return pathList.map(path => pathMap[path])
   }
 
-  // 路由匹配方法
   function match (
     raw: RawLocation,
     currentRoute?: Route,
     redirectedFrom?: Location
   ): Route {
-    // 序列化 url
+    // 序列化 location
     const location = normalizeLocation(raw, currentRoute, false, router)
     const { name } = location
 
-    // 匹配路由记录，创建 route 对象
+    // 获取映射路由记录，并获取返回对应的 route 对象
     if (name) {
       const record = nameMap[name]
       if (process.env.NODE_ENV !== 'production') {
         warn(record, `Route with name '${name}' does not exist`)
       }
       if (!record) return _createRoute(null, location)
+
+      // 提取 params 参数
       const paramNames = record.regex.keys
         .filter(key => !key.optional)
         .map(key => key.name)
@@ -82,6 +85,7 @@ export function createMatcher (
         }
       }
 
+      // 给 path 填充 params 参数
       location.path = fillParams(record.path, location.params, `named route "${name}"`)
       return _createRoute(record, location, redirectedFrom)
     } else if (location.path) {
@@ -184,12 +188,14 @@ export function createMatcher (
     location: Location,
     redirectedFrom?: Location
   ): Route {
+    // 优先返回 redirect 或 alias 属性对应的 route 对象
     if (record && record.redirect) {
       return redirect(record, redirectedFrom || location)
     }
     if (record && record.matchAs) {
       return alias(record, location, record.matchAs)
     }
+    // 创建 route 对象
     return createRoute(record, location, redirectedFrom, router)
   }
 

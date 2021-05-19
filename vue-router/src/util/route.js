@@ -11,14 +11,16 @@ export function createRoute (
   redirectedFrom?: ?Location,
   router?: VueRouter
 ): Route {
+  // 自定义查询字符串的反解析函数
   const stringifyQuery = router && router.options.stringifyQuery
 
   let query: any = location.query || {}
   try {
+    // 复制 query 参数
     query = clone(query)
   } catch (e) {}
 
-  // 创建路由对象
+  // 创建 route 对象
   const route: Route = {
     name: location.name || (record && record.name),
     meta: (record && record.meta) || {},
@@ -27,16 +29,15 @@ export function createRoute (
     query,
     params: location.params || {},
     fullPath: getFullPath(location, stringifyQuery),
-    matched: record ? formatMatch(record) : []
+    matched: record ? formatMatch(record) : [] // 匹配的路由记录数组
   }
   if (redirectedFrom) {
     route.redirectedFrom = getFullPath(redirectedFrom, stringifyQuery)
   }
-  // 禁止修改路由对象
+  // 禁止修改 route 对象
   return Object.freeze(route)
 }
 
-// 深度克隆
 function clone (value) {
   if (Array.isArray(value)) {
     return value.map(clone)

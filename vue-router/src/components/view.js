@@ -20,10 +20,14 @@ export default {
     const h = parent.$createElement
     const name = props.name
     const route = parent.$route
+    // 通过父组件上下文的 createElement 函数创建组件实例
+    // 将组件实例缓存在父组件实例中的 _routerViewCache 属性中
     const cache = parent._routerViewCache || (parent._routerViewCache = {})
 
     // determine current view depth, also check to see if the tree
     // has been toggled inactive but kept-alive.
+    // 由 router-view 组件向上遍历直到根组件，计算组件深度
+    // 目的用于获取匹配 routeRecord 对象上的组件构建函数
     let depth = 0
     let inactive = false
     while (parent && parent._routerRoot !== parent) {
@@ -49,6 +53,7 @@ export default {
         if (cachedData.configProps) {
           fillPropsinData(cachedComponent, data, cachedData.route, cachedData.configProps)
         }
+        // 直接渲染缓存的组件实例
         return h(cachedComponent, data, children)
       } else {
         // render previous empty view
@@ -77,6 +82,7 @@ export default {
         (val && current !== vm) ||
         (!val && current === vm)
       ) {
+        // 将组件实例注入到对应 routeRecord 对象上的 instances 属性上
         matched.instances[name] = val
       }
     }
@@ -113,6 +119,7 @@ export default {
       fillPropsinData(component, data, route, configProps)
     }
 
+    // 渲染组件
     return h(component, data, children)
   }
 }

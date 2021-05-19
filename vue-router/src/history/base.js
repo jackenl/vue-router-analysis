@@ -60,6 +60,7 @@ export class History {
   }
 
   listen (cb: Function) {
+    // 设置路由切换回调
     this.cb = cb
   }
 
@@ -86,7 +87,7 @@ export class History {
     let route
     // catch redirect option https://github.com/vuejs/vue-router/issues/3201
     try {
-      // 获得匹配路由信息
+      // 获取匹配 route 对象
       route = this.router.match(location, this.current)
     } catch (e) {
       this.errorCbs.forEach(cb => {
@@ -95,23 +96,24 @@ export class History {
       // Exception should still be thrown
       throw e
     }
-    const prev = this.current // 缓存前一个路由对象，用作导航守卫的 from 参数
-    // 确认路由切换
+    // 缓存当前 route 对象,用作导航守卫 from 传参
+    const prev = this.current
+    // 触发导航守卫
     this.confirmTransition(
       route,
       () => {
-        // 更新路由
+        // 更新 route 对象
         this.updateRoute(route)
         onComplete && onComplete(route)
         // 更新 url
         this.ensureURL()
-        // 触发 afterHook 回调
+        // 触发 afterEach 导航守卫
         this.router.afterHooks.forEach(hook => {
           hook && hook(route, prev)
         })
 
         // fire ready cbs once
-        // 完成后只执行一次 ready 回调
+        // 完成后只执行一次 onReady 回调
         if (!this.ready) {
           this.ready = true
           this.readyCbs.forEach(cb => {
@@ -141,8 +143,8 @@ export class History {
 
   confirmTransition (route: Route, onComplete: Function, onAbort?: Function) {
     const current = this.current
-    this.pending = route // 缓存路由
-    // 中断路由跳转
+    this.pending = route
+    // 路由跳转中断
     const abort = err => {
       // changed after adding errors with
       // https://github.com/vuejs/vue-router/pull/3047 before that change,
@@ -172,7 +174,7 @@ export class History {
       return abort(createNavigationDuplicatedError(current, route))
     }
 
-    // 对比路由，解析出可复用组件路由、失活组件路由、当前激活组件路由
+    // 对比匹配路由列表，筛选出可复用组件路由、失活组件路由、当前激活组件路由
     const { updated, deactivated, activated } = resolveQueue(
       this.current.matched,
       route.matched
@@ -190,7 +192,7 @@ export class History {
       // 可复用组件 beforeUpdate 钩子
       extractUpdateHooks(updated),
       // in-config enter guards
-      // 路由独享钩子
+      // 路由独享守卫
       activated.map(m => m.beforeEnter),
       // async components
       // 解析异步路由组件
@@ -199,6 +201,7 @@ export class History {
 
     // 导航守卫钩子执行迭代器
     const iterator = (hook: NavigationGuard, next) => {
+      // 防止之前的路由跳转尚未完成影响当前的路由跳转
       if (this.pending !== route) {
         return abort(createNavigationCancelledError(current, route))
       }
@@ -235,11 +238,11 @@ export class History {
       }
     }
 
-    // 异步钩子同步执行
+    // 异步钩子队列同步执行
     runQueue(queue, iterator, () => {
       // wait until async components are resolved before
       // extracting in-component enter guards
-      // 所有异步组件解析完成后，会执行该回调
+      // 异步组件解析完成
       // 获取渲染组件 beforeRouteEnter 钩子
       const enterGuards = extractEnterGuards(activated)
       // 合并全局解析守卫
@@ -249,12 +252,10 @@ export class History {
           return abort(createNavigationCancelledError(current, route))
         }
         this.pending = null
-        onComplete(route) // 触发路由切换完成监听
-        // 保证在组件 beforeCreate 钩子执行后再执行 beforeRouteEnter 钩子
+        onComplete(route) // 触发路由切换监听
         if (this.router.app) {
-          // 等到组件实例被创建后再执行 beforeRouteEnter 钩子 next 回调
-          // 并将组件实例传递给 next 回调
-          // 可以通过 next 回调访问组件实例
+          /* 注意: 在组件实例被创建后再将实例变量vm传参给 beforeRouteEnter 钩子的 next 回调执行 */
+          // 使是唯一可以通过 next 回调获取组件实例的钩子
           this.router.app.$nextTick(() => {
             handleRouteEntered(route)
           })
@@ -265,7 +266,7 @@ export class History {
 
   updateRoute (route: Route) {
     this.current = route
-    // 触发路由切换监听回调
+    // 执行路由切换监听回调
     this.cb && this.cb(route)
   }
 
@@ -330,6 +331,7 @@ function resolveQueue (
   }
 }
 
+// 获取导航守卫钩子函数
 function extractGuards (
   records: Array<RouteRecord>,
   name: string,
@@ -363,10 +365,12 @@ function extractGuard (
   return def.options[key]
 }
 
+// beforeRouteLeave 导航守卫获取
 function extractLeaveGuards (deactivated: Array<RouteRecord>): Array<?Function> {
   return extractGuards(deactivated, 'beforeRouteLeave', bindGuard, true)
 }
 
+// beforeRouteUpdate 导航守卫获取
 function extractUpdateHooks (updated: Array<RouteRecord>): Array<?Function> {
   return extractGuards(updated, 'beforeRouteUpdate', bindGuard)
 }
