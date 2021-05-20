@@ -342,8 +342,7 @@ function extractGuards (
     // 获取组件对应的钩子
     const guard = extractGuard(def, name)
     if (guard) {
-      // 返回每个钩子绑定到对应组件实例执行的函数
-      // 使 beforeRouteEnter 钩子的 next 回调中通过
+      // bind 函数实际是 bindGuard 函数
       return Array.isArray(guard)
         ? guard.map(guard => bind(guard, instance, match, key))
         : bind(guard, instance, match, key)

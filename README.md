@@ -734,8 +734,7 @@ function extractGuards (
     // 获取组件对应的钩子
     const guard = extractGuard(def, name)
     if (guard) {
-      // 返回每个钩子绑定到对应组件实例执行的函数
-      // 使 beforeRouteEnter 钩子的 next 回调中通过
+      // bind 函数实际是 bindGuard 函数
       return Array.isArray(guard)
         ? guard.map(guard => bind(guard, instance, match, key))
         : bind(guard, instance, match, key)
@@ -756,19 +755,65 @@ function extractGuard (
   }
   return def.options[key]
 }
+```
 
-// beforeRouteLeave 导航守卫获取
+beforeRouteLeave 导航守卫获取
+
+```js
 function extractLeaveGuards (deactivated: Array<RouteRecord>): Array<?Function> {
   return extractGuards(deactivated, 'beforeRouteLeave', bindGuard, true)
 }
+```
 
-// beforeRouteUpdate 导航守卫获取
+beforeRouteUpdate 导航守卫获取
+
+```js
 function extractUpdateHooks (updated: Array<RouteRecord>): Array<?Function> {
   return extractGuards(updated, 'beforeRouteUpdate', bindGuard)
 }
 ```
 
-获取匹配路由列表组件实例
+beforeRouteEnter 导航守卫获取
+
+```js
+function extractEnterGuards (
+  activated: Array<RouteRecord>
+): Array<?Function> {
+  return extractGuards(
+    activated,
+    'beforeRouteEnter',
+    (guard, _, match, key) => {
+      return bindEnterGuard(guard, match, key)
+    }
+  )
+}
+
+function bindEnterGuard (
+  guard: NavigationGuard,
+  match: RouteRecord,
+  key: string
+): NavigationGuard {
+  return function routeEnterGuard (to, from, next) {
+    return guard(to, from, cb => {
+      // 把 beforeRouteEnter 守卫回调插入路由记录对象的 enteredCbs 属性中
+      // 用于路由组件挂载完成后执行
+      if (typeof cb === 'function') {
+        if (!match.enteredCbs[key]) {
+          match.enteredCbs[key] = []
+        }
+        match.enteredCbs[key].push(cb)
+      }
+      next(cb)
+    })
+  }
+}
+```
+
+其中 beforeRouteLeave 和 beforeRouteUpdate 导航守卫钩子函数中可以访问组件实例`this`
+
+组件导航守卫如何实现通过 this 指针访问组件实例：
+
+1. 首先获取匹配路由记录对应的组件实例
 
 ```js
 export function flatMapComponents (
@@ -790,7 +835,236 @@ export function flatten (arr: Array<any>): Array<any> {
 }
 ```
 
-#### 异步组件导航守卫注册
+2. 通过函数柯里化将组件导航守卫绑定到的对应组件实例进行执行
+
+```js
+// extractGuards funciton
+flatMapComponents(records, (def, instance, match, key) => {
+  // 获取组件对应的钩子
+  const guard = extractGuard(def, name)
+  if (guard) {
+    // bind 函数实际是 bindGuard 函数
+    return Array.isArray(guard)
+      ? guard.map(guard => bind(guard, instance, match, key))
+      : bind(guard, instance, match, key)
+  }
+})
+
+function bindGuard (guard: NavigationGuard, instance: ?_Vue): ?NavigationGuard {
+  if (instance) {
+    return function boundRouteGuard () {
+      return guard.apply(instance, arguments)
+    }
+  }
+}
+```
+
+beforeRouteEnter 守卫 **不能** 访问 `this`，因为守卫在导航确认前被调用，对应的组件实例尚未被创建，所以 beforeRouteEnter  守卫无法通过`this`指针获取组件实例。
+
+但是，可以通过传一个回调给 `next`来访问组件实例。在导航被确认的时候执行回调，并且把组件实例作为回调方法的参数。
+
+```js
+runQueue(queue, iterator, () => {
+  if (this.pending !== route) {
+    return abort(createNavigationCancelledError(current, route))
+  }
+  this.pending = null
+  onComplete(route) // 触发路由切换监听
+  if (this.router.app) {
+    /* 注意: 在组件实例被创建后再将实例变量vm传参给 beforeRouteEnter 钩子的 next 回调执行 */
+    // 使是唯一可以通过 next 回调获取组件实例的钩子
+    this.router.app.$nextTick(() => {
+      handleRouteEntered(route)
+    })
+  }
+})
+```
+
+在导航守卫队列执行完毕的回调中，通过`this.router.app.$nextTick`函数将`beforeRouteEnter`守卫的`next`回调执行延迟到对应组件在下次 DOM 更新循环结束之后（即组件创建过后），然后通过`handleRouteEntered`函数获取对应`routeRecord`的组件实例，并将组件实例传作守卫`next`回调的首参执行。
+
+```js
+export function handleRouteEntered (route: Route) {
+  for (let i = 0; i < route.matched.length; i++) {
+    const record = route.matched[i]
+    for (const name in record.instances) {
+      const instance = record.instances[name]
+      const cbs = record.enteredCbs[name]
+      if (!instance || !cbs) continue
+      delete record.enteredCbs[name]
+      for (let i = 0; i < cbs.length; i++) {
+        // 给 beforeRouteEnter 钩子next回调传递组件实例参数
+        // 使next回调函数能够访问组件实例
+        if (!instance._isBeingDestroyed) cbs[i](instance)
+      }
+    }
+  }
+}
+```
+
+### 导航守卫执行
+
+```js
+confirmTransition (route: Route, onComplete: Function, onAbort?: Function) {
+  const current = this.current
+  this.pending = route
+  // 路由跳转中断
+  const abort = err => {
+    // changed after adding errors with
+    // https://github.com/vuejs/vue-router/pull/3047 before that change,
+    // redirect and aborted navigation would produce an err == null
+    if (!isNavigationFailure(err) && isError(err)) {
+      if (this.errorCbs.length) {
+        this.errorCbs.forEach(cb => {
+          cb(err)
+        })
+      } else {
+        warn(false, 'uncaught error during route navigation:')
+        console.error(err)
+      }
+    }
+    onAbort && onAbort(err)
+  }
+  const lastRouteIndex = route.matched.length - 1
+  const lastCurrentIndex = current.matched.length - 1
+  // 相同路由中断路由跳转
+  if (
+    isSameRoute(route, current) &&
+    // in the case the route map has been dynamically appended to
+    lastRouteIndex === lastCurrentIndex &&
+    route.matched[lastRouteIndex] === current.matched[lastCurrentIndex]
+  ) {
+    this.ensureURL()
+    return abort(createNavigationDuplicatedError(current, route))
+  }
+
+  // 对比匹配路由列表，筛选出可复用组件路由、失活组件路由、当前激活组件路由
+  const { updated, deactivated, activated } = resolveQueue(
+    this.current.matched,
+    route.matched
+  )
+
+  // 导航守卫队列
+  const queue: Array<?NavigationGuard> = [].concat(
+    // in-component leave guards
+    // 失活组件 beforeLeave 钩子
+    extractLeaveGuards(deactivated),
+    // global before hooks
+    // 全局 beforeEach 钩子
+    this.router.beforeHooks,
+    // in-component update hooks
+    // 可复用组件 beforeUpdate 钩子
+    extractUpdateHooks(updated),
+    // in-config enter guards
+    // 激活组件 beforeEnter 钩子
+    activated.map(m => m.beforeEnter),
+    // async components
+    // 解析异步路由组件
+    resolveAsyncComponents(activated)
+  )
+
+  // 导航守卫钩子执行迭代器
+  const iterator = (hook: NavigationGuard, next) => {
+    // 防止之前的路由跳转尚未完成影响当前的路由跳转
+    if (this.pending !== route) {
+      return abort(createNavigationCancelledError(current, route))
+    }
+    try {
+      hook(route, current, (to: any) => {
+        // 判断 next() 传参
+        if (to === false) {
+          // next(false) -> abort navigation, ensure current URL
+          this.ensureURL(true)
+          abort(createNavigationAbortedError(current, route))
+        } else if (isError(to)) {
+          this.ensureURL(true)
+          abort(to)
+        } else if (
+          typeof to === 'string' ||
+          (typeof to === 'object' &&
+            (typeof to.path === 'string' || typeof to.name === 'string'))
+        ) {
+          // next('/') or next({ path: '/' }) -> redirect
+          abort(createNavigationRedirectedError(current, route))
+          if (typeof to === 'object' && to.replace) {
+            this.replace(to)
+          } else {
+            this.push(to)
+          }
+        } else {
+          // confirm transition and pass on the value
+          // 执行下一个步骤器 step(index + 1)
+          next(to)
+        }
+      })
+    } catch (e) {
+      abort(e)
+    }
+  }
+
+  // 异步钩子队列同步执行
+  runQueue(queue, iterator, () => {
+    // wait until async components are resolved before
+    // extracting in-component enter guards
+    // 异步组件解析完成
+    // 获取渲染组件 beforeRouteEnter 钩子
+    const enterGuards = extractEnterGuards(activated)
+    // 合并全局解析守卫
+    const queue = enterGuards.concat(this.router.resolveHooks)
+    runQueue(queue, iterator, () => {
+      if (this.pending !== route) {
+        return abort(createNavigationCancelledError(current, route))
+      }
+      this.pending = null
+      onComplete(route) // 触发路由切换监听
+      if (this.router.app) {
+        /* 注意: 在组件实例被创建后再将实例变量vm传参给 beforeRouteEnter 钩子的 next 回调执行 */
+        // 使是唯一可以通过 next 回调获取组件实例的钩子
+        this.router.app.$nextTick(() => {
+          handleRouteEntered(route)
+        })
+      }
+    })
+  })
+}
+```
+
+afterEach 导航守卫执行
+
+```js
+this.confirmTransition(
+  route,
+  () => {
+  	...
+    // 触发 afterEach 导航守卫
+    this.router.afterHooks.forEach(hook => {
+      hook && hook(route, prev)
+    })
+    ...
+  },
+  ...
+}
+```
+
+异步导航守卫钩子同步执行实现
+
+```js
+export function runQueue (queue: Array<?NavigationGuard>, fn: Function, cb: Function) {
+  const step = index => {
+    if (index >= queue.length) {
+      cb()
+    } else {
+      if (queue[index]) {
+        fn(queue[index], () => {
+          step(index + 1)
+        })
+      } else {
+        step(index + 1)
+      }
+    }
+  }
+  step(0)
+}
+```
 
 解析异步组件
 
@@ -868,190 +1142,6 @@ export function resolveAsyncComponents (matched: Array<RouteRecord>): Function {
     // 如果不是异步组件直接下一步
     if (!hasAsync) next()
   }
-}
-```
-
-获取异步组件 beforeRouteEnter 钩子
-
-```js
-function extractEnterGuards (
-  activated: Array<RouteRecord>
-): Array<?Function> {
-  return extractGuards(
-    activated,
-    'beforeRouteEnter',
-    (guard, _, match, key) => {
-      return bindEnterGuard(guard, match, key)
-    }
-  )
-}
-
-function bindEnterGuard (
-  guard: NavigationGuard,
-  match: RouteRecord,
-  key: string
-): NavigationGuard {
-  return function routeEnterGuard (to, from, next) {
-    return guard(to, from, cb => {
-      // 把 beforeRouteEnter 守卫回调插入路由记录对象的 enteredCbs 属性中
-      // 用于路由组件挂载完成后执行
-      if (typeof cb === 'function') {
-        if (!match.enteredCbs[key]) {
-          match.enteredCbs[key] = []
-        }
-        match.enteredCbs[key].push(cb)
-      }
-      next(cb)
-    })
-  }
-}
-```
-
-### 导航守卫执行
-
-```js
-confirmTransition (route: Route, onComplete: Function, onAbort?: Function) {
-    const current = this.current
-    this.pending = route
-    // 路由跳转中断
-    const abort = err => {
-      // changed after adding errors with
-      // https://github.com/vuejs/vue-router/pull/3047 before that change,
-      // redirect and aborted navigation would produce an err == null
-      if (!isNavigationFailure(err) && isError(err)) {
-        if (this.errorCbs.length) {
-          this.errorCbs.forEach(cb => {
-            cb(err)
-          })
-        } else {
-          warn(false, 'uncaught error during route navigation:')
-          console.error(err)
-        }
-      }
-      onAbort && onAbort(err)
-    }
-    const lastRouteIndex = route.matched.length - 1
-    const lastCurrentIndex = current.matched.length - 1
-    // 相同路由中断路由跳转
-    if (
-      isSameRoute(route, current) &&
-      // in the case the route map has been dynamically appended to
-      lastRouteIndex === lastCurrentIndex &&
-      route.matched[lastRouteIndex] === current.matched[lastCurrentIndex]
-    ) {
-      this.ensureURL()
-      return abort(createNavigationDuplicatedError(current, route))
-    }
-
-    // 对比匹配路由列表，筛选出可复用组件路由、失活组件路由、当前激活组件路由
-    const { updated, deactivated, activated } = resolveQueue(
-      this.current.matched,
-      route.matched
-    )
-
-    // 导航守卫队列
-    const queue: Array<?NavigationGuard> = [].concat(
-      // in-component leave guards
-      // 失活组件 beforeLeave 钩子
-      extractLeaveGuards(deactivated),
-      // global before hooks
-      // 全局 beforeEach 钩子
-      this.router.beforeHooks,
-      // in-component update hooks
-      // 可复用组件 beforeUpdate 钩子
-      extractUpdateHooks(updated),
-      // in-config enter guards
-      // 激活组件 beforeEnter 钩子
-      activated.map(m => m.beforeEnter),
-      // async components
-      // 解析异步路由组件
-      resolveAsyncComponents(activated)
-    )
-
-    // 导航守卫钩子执行迭代器
-    const iterator = (hook: NavigationGuard, next) => {
-      // 防止之前的路由跳转尚未完成影响当前的路由跳转
-      if (this.pending !== route) {
-        return abort(createNavigationCancelledError(current, route))
-      }
-      try {
-        hook(route, current, (to: any) => {
-          // 判断 next() 传参
-          if (to === false) {
-            // next(false) -> abort navigation, ensure current URL
-            this.ensureURL(true)
-            abort(createNavigationAbortedError(current, route))
-          } else if (isError(to)) {
-            this.ensureURL(true)
-            abort(to)
-          } else if (
-            typeof to === 'string' ||
-            (typeof to === 'object' &&
-              (typeof to.path === 'string' || typeof to.name === 'string'))
-          ) {
-            // next('/') or next({ path: '/' }) -> redirect
-            abort(createNavigationRedirectedError(current, route))
-            if (typeof to === 'object' && to.replace) {
-              this.replace(to)
-            } else {
-              this.push(to)
-            }
-          } else {
-            // confirm transition and pass on the value
-            // 执行下一个步骤器 step(index + 1)
-            next(to)
-          }
-        })
-      } catch (e) {
-        abort(e)
-      }
-    }
-
-    // 异步钩子队列同步执行
-    runQueue(queue, iterator, () => {
-      // wait until async components are resolved before
-      // extracting in-component enter guards
-      // 异步组件解析完成
-      // 获取渲染组件 beforeRouteEnter 钩子
-      const enterGuards = extractEnterGuards(activated)
-      // 合并全局解析守卫
-      const queue = enterGuards.concat(this.router.resolveHooks)
-      runQueue(queue, iterator, () => {
-        if (this.pending !== route) {
-          return abort(createNavigationCancelledError(current, route))
-        }
-        this.pending = null
-        onComplete(route) // 触发路由切换监听
-        if (this.router.app) {
-          /* 注意: 在组件实例被创建后再将实例变量vm传参给 beforeRouteEnter 钩子的 next 回调执行 */
-          // 使是唯一可以通过 next 回调获取组件实例的钩子
-          this.router.app.$nextTick(() => {
-            handleRouteEntered(route)
-          })
-        }
-      })
-    })
-  }
-```
-
-异步导航守卫钩子同步执行实现
-
-```js
-export function runQueue (queue: Array<?NavigationGuard>, fn: Function, cb: Function) {
-  const step = index => {
-    if (index >= queue.length) {
-      cb()
-    } else {
-      if (queue[index]) {
-        fn(queue[index], () => {
-          step(index + 1)
-        })
-      } else {
-        step(index + 1)
-      }
-    }
-  }
-  step(0)
 }
 ```
 
