@@ -25,13 +25,11 @@ import App from './App'
 
 Vue.use(VueRouter) // VueRouter 注册
 
+const Home = { template: '<div>home</div>'}
+
 const router = new VueRouter({
 	routes: [
-		{
-      path: '/',
-      name: 'Home',
-      component: import('../views/Home.vue'),
-    }
+		{ path: '/', component: Home }
 	]
 })
 
@@ -40,6 +38,12 @@ new Vue({
 	render: h => h(App)
 }).$mount('#app')
 ```
+
+VueRotuer 的应用主要分为三步：
+
+1. 调用`Vue.use(VueRotuer)`对 VueRotuer 进行注册；
+2. 传入路由规则配置对 VueRouter 进行实例化，创建一个`router`对象；
+3. 将`router`注入到创建的 Vue 根实例上；
 
 ## VueRouter 注册
 
@@ -120,7 +124,7 @@ export function install (Vue) {
     }
   })
 
-  // 绑定 $router 和 $route 属性到 router 和 route
+  // 绑定 $router 和 $route 属性到 _router 和 _route
   Object.defineProperty(Vue.prototype, '$router', {
     get () { return this._routerRoot._router }
   })
@@ -139,50 +143,14 @@ export function install (Vue) {
 }
 ```
 
-## router 对象构造
+VueRotuer 的`install`函数主要核心有：
 
-```js
-constructor (options: RouterOptions = {}) {
-    this.app = null
-    this.apps = []
-    this.options = options
-    this.beforeHooks = []
-    this.resolveHooks = []
-    this.afterHooks = []
-    // 创建路由匹配对象，通过 matcher 对象进行路由匹配
-    this.matcher = createMatcher(options.routes || [], this)
+* 通过全局混入`mixin`给每一个 Vue 组件混入钩子函数`beforeCreate`和`destroyed`，其中`beforeCreate`钩子负责给组件`$date`对象的`_router`($router)性赋值和对`_route`($route)进行双向绑定，对每个组件进行 router 实例初始化，并且将组件实例注册到 router 实例对象当中，`destroyed`钩子则是在 router 实例中销毁当前组件实例。
+* 全局注册 RouterView 和 RouterLink 路由组件，设置组件导航守卫混入策略与`created`钩子的混入策略一致。
 
-    // 根据不同 mode 使用不同路由模式
-    let mode = options.mode || 'hash'
-    this.fallback =
-      mode === 'history' && !supportsPushState && options.fallback !== false
-    if (this.fallback) {
-      mode = 'hash'
-    }
-    if (!inBrowser) {
-      mode = 'abstract'
-    }
-    this.mode = mode
+#### router 对象初始化
 
-    switch (mode) {
-      case 'history':
-        this.history = new HTML5History(this, options.base)
-        break
-      case 'hash':
-        this.history = new HashHistory(this, options.base, this.fallback)
-        break
-      case 'abstract':
-        this.history = new AbstractHistory(this, options.base)
-        break
-      default:
-        if (process.env.NODE_ENV !== 'production') {
-          assert(false, `invalid mode: ${mode}`)
-        }
-    }
-  }
-```
-
-### router 对象初始化
+router 对象的初始化的定义在入口文件 index.js 的`VueRoute`类当中。
 
 ```js
 init (app: any /* Vue component instance */) {
@@ -256,7 +224,58 @@ init (app: any /* Vue component instance */) {
 }
 ```
 
+router 对象初始化主要工作是将当前组件实例保存到`apps`组件集合当中，将组件实例赋值给`app`属性，给每一个路由组件实例注入`destroyed`钩子函数为组件注销时从`apps`集合移除当前组件实例并清除路由切换监听，最后就是根据当前`location`地址切换到对应的路由。
+
+## router 对象构造
+
+`router`对象构造函数是在 index.js 文件中的`VueRouter`类的`constructor`函数。
+
+```js
+constructor (options: RouterOptions = {}) {
+    this.app = null
+    this.apps = []
+    this.options = options
+    this.beforeHooks = []
+    this.resolveHooks = []
+    this.afterHooks = []
+    // 创建路由匹配对象，通过 matcher 对象进行路由匹配
+    this.matcher = createMatcher(options.routes || [], this)
+
+    // 根据不同 mode 使用不同路由模式
+    let mode = options.mode || 'hash'
+    this.fallback =
+      mode === 'history' && !supportsPushState && options.fallback !== false
+    if (this.fallback) {
+      mode = 'hash'
+    }
+    if (!inBrowser) {
+      mode = 'abstract'
+    }
+    this.mode = mode
+
+    switch (mode) {
+      case 'history':
+        this.history = new HTML5History(this, options.base)
+        break
+      case 'hash':
+        this.history = new HashHistory(this, options.base, this.fallback)
+        break
+      case 'abstract':
+        this.history = new AbstractHistory(this, options.base)
+        break
+      default:
+        if (process.env.NODE_ENV !== 'production') {
+          assert(false, `invalid mode: ${mode}`)
+        }
+    }
+  }
+```
+
+在 VueRouter 实例化过程中，其主要核心 是创建一个路由匹配对象`matcher`，并且根据不同 mode 属性创建特定的路由切换对象`history`。
+
 ## matcher 路由匹配
+
+`matcher`对象生成实现在 create-matcher.js 文件中的`createMatcher`函数。
 
 ```js
 export function createMatcher (
@@ -277,59 +296,117 @@ export function createMatcher (
 }
 ```
 
+`matcher`对象主要负责提供路由匹配和路由控制 API 函数，其中`match`函数用于进行路由匹配；`addRoute`函数用于动态添加路由规则；`addRoutes`用于动态添加路由规则组；`getRoutes`用于获取所有路由记录列表。
+
 ### match 路由匹配
 
 ```js
 function match (
-    raw: RawLocation,
-    currentRoute?: Route,
-    redirectedFrom?: Location
-  ): Route {
-    // 序列化 location
-    const location = normalizeLocation(raw, currentRoute, false, router)
-    const { name } = location
+  raw: RawLocation,
+  currentRoute?: Route,
+  redirectedFrom?: Location
+): Route {
+  // 序列化 location
+  const location = normalizeLocation(raw, currentRoute, false, router)
+  const { name } = location
 
-    // 获取映射路由记录，并获取返回对应的 route 对象
-    if (name) {
-      const record = nameMap[name]
-      if (process.env.NODE_ENV !== 'production') {
-        warn(record, `Route with name '${name}' does not exist`)
-      }
-      if (!record) return _createRoute(null, location)
+  // 获取映射路由记录，并获取返回对应的 route 对象
+  if (name) {
+    const record = nameMap[name]
+    if (process.env.NODE_ENV !== 'production') {
+      warn(record, `Route with name '${name}' does not exist`)
+    }
+    if (!record) return _createRoute(null, location)
 
-      // 提取 params 参数
-      const paramNames = record.regex.keys
-        .filter(key => !key.optional)
-        .map(key => key.name)
+    // 提取 params 参数
+    const paramNames = record.regex.keys
+      .filter(key => !key.optional)
+      .map(key => key.name)
 
-      if (typeof location.params !== 'object') {
-        location.params = {}
-      }
-
-      if (currentRoute && typeof currentRoute.params === 'object') {
-        for (const key in currentRoute.params) {
-          if (!(key in location.params) && paramNames.indexOf(key) > -1) {
-            location.params[key] = currentRoute.params[key]
-          }
-        }
-      }
-
-      // 给 path 填充 params 参数
-      location.path = fillParams(record.path, location.params, `named route "${name}"`)
-      return _createRoute(record, location, redirectedFrom)
-    } else if (location.path) {
+    if (typeof location.params !== 'object') {
       location.params = {}
-      for (let i = 0; i < pathList.length; i++) {
-        const path = pathList[i]
-        const record = pathMap[path]
-        if (matchRoute(record.regex, location.path, location.params)) {
-          return _createRoute(record, location, redirectedFrom)
+    }
+
+    if (currentRoute && typeof currentRoute.params === 'object') {
+      for (const key in currentRoute.params) {
+        if (!(key in location.params) && paramNames.indexOf(key) > -1) {
+          location.params[key] = currentRoute.params[key]
         }
       }
     }
-    // no match
-    return _createRoute(null, location)
+
+    // 给 path 填充 params 参数
+    location.path = fillParams(record.path, location.params, `named route "${name}"`)
+    return _createRoute(record, location, redirectedFrom)
+  } else if (location.path) {
+    location.params = {}
+    for (let i = 0; i < pathList.length; i++) {
+      const path = pathList[i]
+      const record = pathMap[path]
+      if (matchRoute(record.regex, location.path, location.params)) {
+        return _createRoute(record, location, redirectedFrom)
+      }
+    }
   }
+  // no match
+  return _createRoute(null, location)
+}
+...
+
+function _createRoute (
+  record: ?RouteRecord,
+  location: Location,
+  redirectedFrom?: Location
+): Route {
+  // 优先返回 redirect 或 alias 属性对应的 route 对象
+  if (record && record.redirect) {
+    return redirect(record, redirectedFrom || location)
+  }
+  if (record && record.matchAs) {
+    return alias(record, location, record.matchAs)
+  }
+  // 创建 route 对象
+  return createRoute(record, location, redirectedFrom, router)
+}
+```
+
+由于`patch`函数的传参可以是路径字符串或者包含匹配属性的对象，所以`patch`函数首先将传入`location`进行序列化处理生成匹配参数对象，然后通过`location.name`或`location.path`获取到对应的`routeRecord`对象，最后调用`_createRoute`函数生成基于`routeRecord`的`route`对象并返回，如果没有则创建一个默认`route`对象。
+
+而`_createRoute`函数实际上是最终是调用 route.js 文件中`createRoute`函数来生成`route`对象。
+
+```js
+export function createRoute (
+  record: ?RouteRecord,
+  location: Location,
+  redirectedFrom?: ?Location,
+  router?: VueRouter
+): Route {
+  // 自定义查询字符串的反解析函数
+  const stringifyQuery = router && router.options.stringifyQuery
+
+  let query: any = location.query || {}
+  try {
+    // 复制 query 参数
+    query = clone(query)
+  } catch (e) {}
+
+  // 创建 route 对象
+  const route: Route = {
+    name: location.name || (record && record.name),
+    meta: (record && record.meta) || {},
+    path: location.path || '/',
+    hash: location.hash || '',
+    query,
+    params: location.params || {},
+    fullPath: getFullPath(location, stringifyQuery),
+    matched: record ? formatMatch(record) : [] // 匹配的路由记录数组
+  }
+  if (redirectedFrom) {
+    route.redirectedFrom = getFullPath(redirectedFrom, stringifyQuery)
+  }
+  // 禁止修改 route 对象
+  return Object.freeze(route)
+}
 ```
 
 ### addRoute 动态添加路由规则
@@ -365,6 +442,13 @@ function getRoutes () {
 ```
 
 ## routeMap 路由映射
+
+```js
+// 生成 path 队列、path路由映射和名称路由映射
+const { pathList, pathMap, nameMap } = createRouteMap(routes)
+```
+
+在`createMatcher`函数中，路由匹配的实现是基于路由映射来实现的，而路由映射的实现函数则是 create-route-map.js 文件中的`createRouteMap`函数。
 
 ```js
 export function createRouteMap (
@@ -424,6 +508,10 @@ export function createRouteMap (
   }
 }
 ```
+
+`createRouteMap`函数首先会创建三个变量：`pathList`用于存储所有的路由规则`path`和`alias`路径字符串；`pathMap`用于作为基于路由规则`path`和`alias`的路由记录映射表；`nameMap`用于作为基于路由规则`name`的路由记录映射表。
+
+接下来`createRouteMap`函数给每一个路由规则创建`routeRecord`路由记录对象，并把创建的`routeRecord`对象添加到对应路由映射表当中，同时把`path`添加到`pathList`路径序列当中。
 
 ### addRouteRecord 添加路由记录
 
@@ -497,6 +585,8 @@ function addRouteRecord (
  }
 ```
 
+以上便是路由记录的创建过程，基于路由规则生成一个新的`routeRecord`对象，所谓的路由匹配就是通过`path`等匹配参数从路由映射表中获取到对应`routeRecord`路由记录对象。`routeRecord`对象生成后，接下来就是基于匹配参数写入到对应的路由记录映射表当中。
+
 #### 创建嵌套路由记录
 
 ```js
@@ -533,7 +623,11 @@ if (route.children) {
 }
 ```
 
+创建嵌套路由记录过程是通过循环遍历路由规则的`children`嵌套规则，然后通过递归调用`addRouteRecord`递归创建`routeRecord`对象，最后将`routeReocord`对象写入扁平化的路由映射表当中。
+
 #### 创建路由记录映射
+
+实际上路由映射有3种，分别是基于路由规则`path`、`alias`和`name`属性的路由映射，其中基于`path`和`alias`的映射保存在`pathMap`集合当中，基于`name`保存在`nameMap`集合当中。
 
 ##### 基于 path 路由记录映射
 
@@ -574,6 +668,8 @@ if (route.alias !== undefined) {
 }
 ```
 
+正常情况下，会给当前路由规则生成一个新的`routeRecord`对象并写入到`pathMap`集合当中，当路由规则配置有`alias`属性时，会创建新的`path`属性`alias`值的嵌套规则配置，然后递归调用`addRouteRecord`函数生成基于`alias`别名的路由映射。
+
 ##### 基于 name 路由记录映射
 
 ```js
@@ -591,7 +687,11 @@ if (name) {
 }
 ```
 
+当路由规则配置有`name`属性时，同时会将当前路由记录`routeRecord`写入`nameMap`集合当中。
+
 ## 路由切换
+
+路由切换的是实现在 history/base.js 文件的`History`类中，主要实现函数则是`transitionTo`函数。
 
 ### transitionTo 导航切换
 
@@ -675,7 +775,11 @@ export class History {
 }
 ```
 
+`transitionTo`函数会调用`match`函数生成对应的`route`对象，然后`confirmTransition`函数进行路由切换确认，路由切换确认执行完毕后执行路由切换确认回调，在确认回调中执行`updateRoute`函数替换当前路由，同时执行路由切换监听回调触发路由跳转。
+
 ### 路由跳转
+
+在前面的`router`对象初始化过程中，设置了路由切换监听，当`histor.current`更新时就会触发路由切换监听回调的执行，替换所有路由组件的`_route`属性，而`Vue.install`函数通过全局混入钩子给`_route`属性实现了数据双向绑定，当`_route`属性被更改时就会触发 RouterView 组件的`render`进行重新渲染匹配的路由组件，从而实现路由跳转。
 
 ```js
 /* index.js */
@@ -692,7 +796,9 @@ history.listen(route => {
 
 ### 导航守卫注册
 
-#### 全局导航守卫注册
+VueRouter 的导航守卫有三种，分别是全局守卫、路由独享守卫、组件独享守卫。
+
+#### 全局守卫注册
 
 ```js
 /* index.js */
@@ -719,7 +825,7 @@ function registerHook (list: Array<any>, fn: Function): Function {
 }
 ```
 
-#### 组件导航守卫注册
+#### 组件独享守卫注册
 
 获取导航守卫钩子
 
@@ -835,7 +941,7 @@ export function flatten (arr: Array<any>): Array<any> {
 }
 ```
 
-2. 通过函数柯里化将组件导航守卫绑定到的对应组件实例进行执行
+2. 通过函数闭包将组件导航守卫绑定到的对应组件实例进行执行
 
 ```js
 // extractGuards funciton
@@ -902,6 +1008,8 @@ export function handleRouteEntered (route: Route) {
 ```
 
 ### 导航守卫执行
+
+导航守卫的执行主要在`confirmTransition`路由切换确认函数当中。
 
 ```js
 confirmTransition (route: Route, onComplete: Function, onAbort?: Function) {
@@ -1001,7 +1109,7 @@ confirmTransition (route: Route, onComplete: Function, onAbort?: Function) {
     }
   }
 
-  // 异步钩子队列同步执行
+  // 异步钩子队列顺序执行
   runQueue(queue, iterator, () => {
     // wait until async components are resolved before
     // extracting in-component enter guards
@@ -1045,9 +1153,46 @@ this.confirmTransition(
 }
 ```
 
-异步导航守卫钩子同步执行实现
+完整的导航守卫解析流程：
+
+1. 导航被触发。
+2. 在失活的组件里调用 `beforeRouteLeave` 守卫。
+3. 调用全局的 `beforeEach` 守卫。
+4. 在重用的组件里调用 `beforeRouteUpdate` 守卫 (2.2+)。
+5. 在路由配置里调用 `beforeEnter`。
+6. 解析异步路由组件。
+7. 在被激活的组件里调用 `beforeRouteEnter`。
+8. 调用全局的 `beforeResolve` 守卫 (2.5+)。
+9. 导航被确认。
+10. 调用全局的 `afterEach` 钩子。
+11. 触发 DOM 更新。
+12. 调用 `beforeRouteEnter` 守卫中传给 `next` 的回调函数，创建好的组件实例会作为回调函数的参数传入。
+
+#### 异步导航守卫顺序执行实现
+
+异步导航守卫顺序执行实现是通过 async.js 的`runQueue`工具函数来实现的，在其函数内部定义`step`步进器函数，逐个从守卫队列中取出钩子函数来执行，钩子函数内部调用`next`函数实际为执行`iterator`迭代器函数内部的`hook`函数的最后回调函数，回调函数内部继续执行`next`函数触发`iterator`函数的回调函数，从而执行`step(index + 1)`触发下一个`hook`函数执行，直到遍历完整个队列执行后最终调用`runQueue`函数的`cb`回调。
 
 ```js
+/** history/base.js */
+const iterator = (hook: NavigationGuard, next) => {
+  ...
+  try {
+    hook(route, current, (to: any) => {
+      	...
+        // confirm transition and pass on the value
+        // 执行下一个步骤器 step(index + 1)
+        next(to)
+    })
+  } catch (e) {
+    abort(e)
+  }
+}
+
+runQueue(queue, iterator, () => {
+  ...
+})
+
+/** utils/async.js */
 export function runQueue (queue: Array<?NavigationGuard>, fn: Function, cb: Function) {
   const step = index => {
     if (index >= queue.length) {
@@ -1066,7 +1211,9 @@ export function runQueue (queue: Array<?NavigationGuard>, fn: Function, cb: Func
 }
 ```
 
-解析异步组件
+#### 解析异步组件
+
+由于异步组件的导入是在被执行到导入语句之后才被请求解析出来，在异步组件尚未被解析创建之前是无法获取到组件实例上的钩子函数的，所以需先获取异步组件并创建组件实例后，才能继续获取组件独享守卫钩子，具体实现如下：
 
 ```js
 export function resolveAsyncComponents (matched: Array<RouteRecord>): Function {
@@ -1147,6 +1294,8 @@ export function resolveAsyncComponents (matched: Array<RouteRecord>): Function {
 
 ## history 模式
 
+history 模式的实现核心是根据不同`mode`属性实现一套类 History API，监听路由切换通过类 History API 对浏览历史记录进行读写操作，同时监听类 History API 的触发执行进行对应路由跳转。
+
 ### hash 模式
 
 ```js
@@ -1200,7 +1349,7 @@ constructor (router: Router, base: ?string) {
 }
 ```
 
-设置 popstate 事件监听，触发路由切换
+设置 popstate 事件监听，触发路由切换。
 
 ```js
 const handleRoutingEvent = () => {
@@ -1227,7 +1376,76 @@ this.listeners.push(() => {
 
 ### abstract 模式
 
-通过数组和索引实现 history 抽象
+abstract 模式通过数组和索引实现了对 History API 的抽象，主要用于 node 环境下调试。
+
+```js
+export class AbstractHistory extends History {
+  index: number
+  stack: Array<Route>
+
+  constructor (router: Router, base: ?string) {
+    super(router, base)
+    this.stack = []
+    this.index = -1
+  }
+
+  push (location: RawLocation, onComplete?: Function, onAbort?: Function) {
+    this.transitionTo(
+      location,
+      route => {
+        this.stack = this.stack.slice(0, this.index + 1).concat(route)
+        this.index++
+        onComplete && onComplete(route)
+      },
+      onAbort
+    )
+  }
+
+  replace (location: RawLocation, onComplete?: Function, onAbort?: Function) {
+    this.transitionTo(
+      location,
+      route => {
+        this.stack = this.stack.slice(0, this.index).concat(route)
+        onComplete && onComplete(route)
+      },
+      onAbort
+    )
+  }
+
+  go (n: number) {
+    const targetIndex = this.index + n
+    if (targetIndex < 0 || targetIndex >= this.stack.length) {
+      return
+    }
+    const route = this.stack[targetIndex]
+    this.confirmTransition(
+      route,
+      () => {
+        const prev = this.current
+        this.index = targetIndex
+        this.updateRoute(route)
+        this.router.afterHooks.forEach(hook => {
+          hook && hook(route, prev)
+        })
+      },
+      err => {
+        if (isNavigationFailure(err, NavigationFailureType.duplicated)) {
+          this.index = targetIndex
+        }
+      }
+    )
+  }
+
+  getCurrentLocation () {
+    const current = this.stack[this.stack.length - 1]
+    return current ? current.fullPath : '/'
+  }
+
+  ensureURL () {
+    // noop
+  }
+}
+```
 
 ## 路由组件
 
@@ -1384,3 +1602,14 @@ const handler = e => {
 }
 ```
 
+## 结语
+
+以上便是本人对 VueRouter 源码的解读和分析，如果你想查看完整的源码分析过程，你也可以访问我的[github仓库](https://github.com/jackenl/vue-router-analysis)进行查看，里面完整的代码分析过程和注释，希望我的源码分析能够帮助到你很好理解该库的实现原理。
+
+另外，你也可以阅读我的源码解读系列文章：
+
+* [深入解读 axios 源码](https://juejin.cn/post/6922713221665128462)
+
+* [深入解读 Vuex 源码](https://juejin.cn/post/6953467130029441038)
+
+* [深入解读 VueRouter 源码](https://juejin.cn/post/6967272280321687565)

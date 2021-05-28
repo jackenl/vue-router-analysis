@@ -7,8 +7,6 @@
     "example": "examples"
   },
   "scripts": {
-    "import": "webpack --config examples/normal-import/webpack.config.js",
-    "import:async": "webpack --config examples/async-import/webpack.config.js"
   },
   "repository": {
     "type": "git",
